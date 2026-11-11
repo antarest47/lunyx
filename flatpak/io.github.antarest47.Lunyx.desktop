@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Lunyx
+Comment=Cliente de anime con libVLC embebido
+Exec=lunyx
+Icon=io.github.antarest47.Lunyx
+Categories=AudioVideo;Player;
+Terminal=false

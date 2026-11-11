@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>io.github.antarest47.Lunyx</id>
+  <name>Lunyx</name>
+  <summary>Cliente de anime con libVLC embebido, sin scraper de metadata</summary>
+
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>GPL-3.0-only</project_license>
+
+  <developer id="io.github.antarest47">
+    <name>antarest47</name>
+  </developer>
+
+  <description>
+    <p>
+      Lunyx es un cliente de escritorio para ver una biblioteca de anime
+      propia (share SMB o carpeta local), sin las convenciones de nombres
+      que piden Jellyfin o Plex para que su scraper reconozca una serie.
+      La idea es simple: una carpeta con la serie, una carátula, y Lunyx la
+      lee y la reproduce tal cual está — sin fichas de metadata que armar
+      ni un servidor de streaming que mantener.
+    </p>
+    <p>
+      Reproduce con libVLC embebido en vez de transcodear, así que no hay
+      compatibilidad de codec que resolver del lado del servidor: HEVC
+      10-bit, subtítulos ASS con estilos (karaoke, fuentes custom), dual
+      audio — todo se reproduce tal cual es.
+    </p>
+    <p>Funciones principales:</p>
+    <ul>
+      <li>Bibliotecas de series o películas por SMB2/3 o carpeta local</li>
+      <li>Progreso de reproducción y preferencia de pista por serie, con
+      centralización opcional entre varios equipos</li>
+      <li>Modo TV navegable por completo con teclado o control remoto</li>
+      <li>Corrección manual de temporada/episodio, nombres custom y orden
+      de películas cuando el heurístico automático no alcanza</li>
+    </ul>
+  </description>
+
+  <launchable type="desktop-id">io.github.antarest47.Lunyx.desktop</launchable>
+
+  <url type="homepage">https://github.com/antarest47/lunyx</url>
+
+  <!-- Sin contenido propio calificable (reproduce lo que ya tenga la
+       biblioteca del usuario, no aloja ni sugiere nada) — sin atributos
+       hijos, oars-1.1 vacío es válido y significa "sin contenido a
+       calificar" (mismo criterio que otros reproductores genéricos). -->
+  <content_rating type="oars-1.1" />
+
+  <releases>
+    <release version="0.1.0" date="2026-08-16">
+      <description>
+        <p>
+          Primera versión numerada del proyecto.
+        </p>
+      </description>
+    </release>
+  </releases>
+</component>

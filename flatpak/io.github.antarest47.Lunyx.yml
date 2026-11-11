@@ -1,0 +1,279 @@
+id: io.github.antarest47.Lunyx
+runtime: org.kde.Platform
+runtime-version: '6.9'
+sdk: org.kde.Sdk
+base: io.qt.PySide.BaseApp
+base-version: '6.9'
+command: lunyx
+
+build-options:
+  env:
+    - BASEAPP_REMOVE_WEBENGINE=1
+    - BASEAPP_DISABLE_NUMPY=1
+
+# org.kde.Platform 6.9 corre en realidad sobre freedesktop-sdk 24.08 por
+# debajo (confirmado leyendo /.flatpak-info: "runtime-version": "24.08") —
+# ese runtime base viene con los decoders con patentes (h264/hevc/vc1/vvc)
+# de ffmpeg DESHABILITADOS a propósito, dejando solo OpenH264 como decoder
+# H.264 — y OpenH264 NO soporta perfiles 10-bit (High 10), que es lo que usa
+# la mayoría del anime real de la biblioteca (confirmado con ffprobe sobre
+# un mkv real: "profile=High 10"). Sin esta extensión, VLC arranca bien pero
+# el video queda en negro con "DecodeFrame failed" en cada frame. La versión
+# de la extensión tiene que matchear ese 24.08, no el 6.9 del runtime KDE.
+add-extensions:
+  org.freedesktop.Platform.ffmpeg-full:
+    version: '24.08'
+    directory: lib/ffmpeg
+    add-ld-path: .
+
+cleanup-commands:
+  - /app/cleanup-BaseApp.sh
+  - mkdir -p /app/lib/ffmpeg
+  # Regenerar el cache de plugins de VLC ACÁ (al final de todo, después de
+  # cualquier strip/post-proceso de binarios de flatpak-builder) — hacerlo
+  # como post-install del módulo libvlc no alcanzó: algo posterior seguía
+  # tocando los .so y volvía a invalidar el cache (timestamps).
+  - /app/lib/vlc/vlc-cache-gen /app/lib/vlc/plugins
+
+finish-args:
+  # Video embebido (ver Paso 1 de CONTEXT.md: set_xwindow() depende de X11/XWayland).
+  # OJO: NO agregar --socket=fallback-x11 junto con --socket=wayland — Flatpak
+  # lo interpreta como "X11 solo si Wayland no está disponible" y termina sin
+  # otorgar X11 en absoluto en esta sesión (confirmado con `flatpak run
+  # --verbose`: nunca aparece "Allowing X11 access"). set_xwindow() necesita
+  # X11 real siempre, así que va sin condicionar a fallback.
+  - --socket=x11
+  - --socket=wayland
+  - --socket=pulseaudio
+  - --device=dri
+  # SMB (smbprotocol habla SMB2/3 directo, sin montar nada — ver Paso 2) +
+  # KWallet vía keyring (arquitectura de credenciales del Paso 2, la
+  # contraseña nunca se guarda en el JSON de config).
+  - --share=network
+  - --talk-name=org.freedesktop.secrets
+  # Inhibir el protector de pantalla/suspensión mientras se reproduce
+  # video (ver player_engine._ScreenSaverInhibitor, Paso 30 en
+  # CONTEXT.md) — org.freedesktop.ScreenSaver NO es un portal de
+  # Flatpak, necesita este permiso explícito (a diferencia de
+  # org.freedesktop.portal.Desktop, siempre alcanzable sin declarar
+  # nada acá).
+  - --talk-name=org.freedesktop.ScreenSaver
+
+modules:
+  # libvlc necesita libsmbclient para poder abrir URLs smb:// (su plugin de
+  # acceso SMB está basado en libsmbclient, no es una reimplementación
+  # propia — ver Paso 2.5 de CONTEXT.md). Sin esto, `./configure` de VLC
+  # imprime "checking for SMBCLIENT... no" y arma el build IGUAL, sin tirar
+  # error, pero el plugin de acceso SMB simplemente no existe: VLC arranca
+  # bien, pero "es incapaz de abrir" cualquier MRL smb://. Building Samba
+  # completo hace falta porque no hay una libsmbclient standalone — se sigue
+  # el mismo patrón exacto que usa el Flatpak oficial de VLC
+  # (org.videolan.VLC), incluida la dependencia de Perl (Parse::Yapp) que
+  # pide el build de Samba.
+  - name: parse-yapp
+    buildsystem: simple
+    build-commands:
+      - perl Makefile.PL INSTALL_BASE=/app
+      - make
+      - make install
+    sources:
+      - type: archive
+        url: https://cpan.metacpan.org/authors/id/W/WB/WBRASWELL/Parse-Yapp-1.21.tar.gz
+        sha256: 3810e998308fba2e0f4f26043035032b027ce51ce5c8a52a8b8e340ca65f13e5
+
+  - name: smbclient
+    config-opts:
+      - --without-json
+      - --without-ad-dc
+      - --without-ldap
+      - --without-ads
+      - --without-pam
+      - --disable-python
+      - --disable-cups
+      - --disable-iprint
+      - --without-systemd
+      # ldb (motor tipo LDAP interno de Samba, solo hace falta para el rol
+      # AD-DC que ya deshabilitamos arriba) pide lmdb >=0.9.16 si no se le
+      # dice lo contrario — no vale la pena agregar un módulo lmdb aparte
+      # solo para esto.
+      - --without-ldb-lmdb
+      - --bindir=.
+      - --sbindir=.
+      - --sysconfdir=.
+    cleanup:
+      - /lib/perl5
+    build-options:
+      env:
+        PERL5LIB: /app/lib/perl5
+    buildsystem: autotools
+    sources:
+      - type: archive
+        url: https://download.samba.org/pub/samba/stable/samba-4.24.4.tar.gz
+        sha256: df2c51ab4361ec626ab9988e5946efcca8465bc7afae834291d5558468265ff8
+
+  # libebml + libmatroska: sin esto, VLC compila sin su demuxer nativo de
+  # .mkv (config-opts no tiene nada que ver, es una dependencia externa que
+  # "configure" busca sola) — "checking for MATROSKA... no". El build NO
+  # frena por esto (mismo patrón silencioso que libsmbclient/libass), pero
+  # sin el demuxer nativo, VLC cae al demuxer genérico "avformat" (de
+  # ffmpeg) para abrir .mkv — que decodifica bien video/audio pero mapea
+  # MAL la pista de subtítulos (queda "undf", codec sin identificar,
+  # confirmado con `vlc -vv`: "avformat demux debug: adding es: subtitle
+  # codec = undf"). Root cause real de que los subtítulos no cargaran
+  # después de agregar libass — libass estaba bien, el problema era que ni
+  # siquiera se llegaba a intentar usarlo porque el demuxer nunca identificó
+  # la pista.
+  - name: libebml
+    buildsystem: cmake-ninja
+    config-opts:
+      - -DCMAKE_BUILD_TYPE=RelWithDebInfo
+      - -DBUILD_SHARED_LIBS=ON
+      - -DCMAKE_POSITION_INDEPENDENT_CODE=ON
+      - -DCMAKE_POLICY_VERSION_MINIMUM=3.5
+    sources:
+      - type: archive
+        url: https://dl.matroska.org/downloads/libebml/libebml-1.4.5.tar.xz
+        sha256: 4971640b0592da29c2d426f303e137a9b0b3d07e1b81d069c1e56a2f49ab221b
+
+  - name: libmatroska
+    buildsystem: cmake-ninja
+    config-opts:
+      - -DCMAKE_BUILD_TYPE=RelWithDebInfo
+      - -DBUILD_SHARED_LIBS=ON
+      - -DCMAKE_POSITION_INDEPENDENT_CODE=ON
+      - -DCMAKE_POLICY_VERSION_MINIMUM=3.5
+    sources:
+      - type: archive
+        url: https://dl.matroska.org/downloads/libmatroska/libmatroska-1.7.1.tar.xz
+        sha256: 572a3033b8d93d48a6a858e514abce4b2f7a946fe1f02cbfeca39bfd703018b3
+
+  # libass renderiza los subtítulos ASS con estilos (karaoke, posición,
+  # fuentes custom) que usa el fansub real de la biblioteca — sin esto,
+  # `./configure` de VLC imprime "checking for LIBASS... no" y arma el
+  # build IGUAL, sin error, pero sin poder mostrar esos subtítulos (mismo
+  # patrón silencioso que el de libsmbclient). harfbuzz/fontconfig/fribidi
+  # (las otras dependencias de libass) ya vienen con el runtime — no hizo
+  # falta agregarlas aparte.
+  - name: libass
+    config-opts:
+      - --enable-harfbuzz
+      - --enable-fontconfig
+    sources:
+      - type: archive
+        url: https://github.com/libass/libass/releases/download/0.17.5/libass-0.17.5.tar.xz
+        sha256: 2dca25c0e0c837ddf00b52011b3f82cac1e4ddd3ad018227806b0c2288864acc
+      - type: script
+        commands:
+          - autoreconf -fiv
+        dest-filename: autogen.sh
+
+  - name: libvlc
+    config-opts:
+      - BUILDCC=gcc
+      - --disable-lua
+      - --disable-a52
+      - --disable-qt
+      - --disable-ncurses
+      - --disable-udev
+    sources:
+      - type: archive
+        url: https://get.videolan.org/vlc/3.0.23/vlc-3.0.23.tar.xz
+        sha256: e891cae6aa3ccda69bf94173d5105cbc55c7a7d9b1d21b9b21666e69eff3e7e0
+
+  - python3-requirements.yaml
+
+  - name: lunyx
+    buildsystem: simple
+    build-commands:
+      - install -Dm755 lunyx-wrapper.sh /app/bin/lunyx
+      - install -Dm644 main.py /app/lib/lunyx/main.py
+      - install -Dm644 app_restart.py /app/lib/lunyx/app_restart.py
+      - install -Dm644 app_settings.py /app/lib/lunyx/app_settings.py
+      - install -Dm644 centralized_store.py /app/lib/lunyx/centralized_store.py
+      - install -Dm644 credentials.py /app/lib/lunyx/credentials.py
+      - install -Dm644 episodes.py /app/lib/lunyx/episodes.py
+      - install -Dm644 gallery.py /app/lib/lunyx/gallery.py
+      - install -Dm644 library_metadata.py /app/lib/lunyx/library_metadata.py
+      - install -Dm644 library_store.py /app/lib/lunyx/library_store.py
+      - install -Dm644 player_engine.py /app/lib/lunyx/player_engine.py
+      - install -Dm644 player_icons.py /app/lib/lunyx/player_icons.py
+      - install -Dm644 progress_store.py /app/lib/lunyx/progress_store.py
+      - install -Dm644 smb_paths.py /app/lib/lunyx/smb_paths.py
+      - install -Dm644 smb_scanner.py /app/lib/lunyx/smb_scanner.py
+      - install -Dm644 theme.py /app/lib/lunyx/theme.py
+      - install -Dm644 track_prefs.py /app/lib/lunyx/track_prefs.py
+      - install -Dm644 track_probe.py /app/lib/lunyx/track_probe.py
+      - install -Dm644 tv_episodes.py /app/lib/lunyx/tv_episodes.py
+      - install -Dm644 tv_gallery.py /app/lib/lunyx/tv_gallery.py
+      - install -Dm644 tv_input.py /app/lib/lunyx/tv_input.py
+      - install -Dm644 tv_main.py /app/lib/lunyx/tv_main.py
+      - install -Dm644 tv_player.py /app/lib/lunyx/tv_player.py
+      - install -Dm644 widgets.py /app/lib/lunyx/widgets.py
+      # gallery.py carga esto con Path(__file__).parent / "logo.png" —
+      # tiene que estar al lado de main.py, no solo en el ícono del sistema.
+      - install -Dm644 logo.png /app/lib/lunyx/logo.png
+      # Leído en vivo por gallery.AboutDialog (Path(__file__).parent /
+      # "VERSION") — tiene que viajar al lado de main.py, igual que logo.png.
+      - install -Dm644 VERSION /app/lib/lunyx/VERSION
+      - install -Dm644 io.github.antarest47.Lunyx.desktop /app/share/applications/io.github.antarest47.Lunyx.desktop
+      - install -Dm644 lunyx-icon.png /app/share/icons/hicolor/512x512/apps/io.github.antarest47.Lunyx.png
+      - install -Dm644 io.github.antarest47.Lunyx.metainfo.xml /app/share/metainfo/io.github.antarest47.Lunyx.metainfo.xml
+    sources:
+      - type: file
+        path: lunyx-wrapper.sh
+      - type: file
+        path: io.github.antarest47.Lunyx.desktop
+      - type: file
+        path: lunyx-icon.png
+      - type: file
+        path: io.github.antarest47.Lunyx.metainfo.xml
+      - type: file
+        path: ../logo.png
+      - type: file
+        path: ../VERSION
+      - type: file
+        path: ../main.py
+      - type: file
+        path: ../app_restart.py
+      - type: file
+        path: ../app_settings.py
+      - type: file
+        path: ../centralized_store.py
+      - type: file
+        path: ../credentials.py
+      - type: file
+        path: ../episodes.py
+      - type: file
+        path: ../gallery.py
+      - type: file
+        path: ../library_metadata.py
+      - type: file
+        path: ../library_store.py
+      - type: file
+        path: ../player_engine.py
+      - type: file
+        path: ../player_icons.py
+      - type: file
+        path: ../progress_store.py
+      - type: file
+        path: ../smb_paths.py
+      - type: file
+        path: ../smb_scanner.py
+      - type: file
+        path: ../theme.py
+      - type: file
+        path: ../track_prefs.py
+      - type: file
+        path: ../track_probe.py
+      - type: file
+        path: ../tv_episodes.py
+      - type: file
+        path: ../tv_gallery.py
+      - type: file
+        path: ../tv_input.py
+      - type: file
+        path: ../tv_main.py
+      - type: file
+        path: ../tv_player.py
+      - type: file
+        path: ../widgets.py

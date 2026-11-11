@@ -1,0 +1,24 @@
+venv/
+__pycache__/
+*.pyc
+
+# Cliente Android, un proyecto aparte.
+android/
+
+# Videos sueltos para pruebas locales.
+*.mkv
+
+# Artefactos de build de Flatpak (Paso 21) — se regeneran con flatpak-builder,
+# no tiene sentido versionarlos.
+flatpak/.flatpak-builder/
+flatpak/build-dir/
+flatpak/*.flatpak
+flatpak/*.log
+
+# Notas internas de desarrollo: no se publican (los comentarios del
+# código que dicen "ver CONTEXT.md, Paso N" se refieren a ellas).
+CONTEXT.md
+CONTEXT_SUMMARY.md
+
+# Bundles Flatpak armados: no van en el repo.
+releases/*.flatpak
