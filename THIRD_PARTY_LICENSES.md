@@ -25,6 +25,7 @@ con Lunyx ni lo respalda.
 | [libebml](https://github.com/Matroska-Org/libebml) | LGPL-2.1 | Parseo de bajo nivel del formato binario EBML en el que se basa Matroska (`.mkv`). |
 | [libmatroska](https://github.com/Matroska-Org/libmatroska) | LGPL-2.1 | Demuxer nativo de `.mkv` para VLC — sin esto, VLC cae al demuxer genérico de ffmpeg, que mapea mal las pistas de subtítulos. |
 | [Parse::Yapp](https://metacpan.org/pod/Parse::Yapp) (Perl) | misma licencia que Perl (Artistic License / GPL) | Solo se usa en TIEMPO DE BUILD, para generar el parser de Samba — no queda linkeado en el binario final. |
+| [flatpak-pip-generator](https://github.com/flatpak/flatpak-builder-tools/tree/master/pip) (`flatpak/flatpak-pip-generator.py`, copia sin cambios) | MIT | Solo para armar el Flatpak: genera `python3-requirements.yaml` con las dependencias de Python. |
 
 ## Paquetes de Python
 
