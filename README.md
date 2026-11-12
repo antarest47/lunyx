@@ -10,6 +10,19 @@ que mantener.
 Proyecto experimental, en desarrollo activo. Pensado para Linux de
 escritorio (probado en Debian + Plasma).
 
+## Hecho con IA
+
+Lunyx está hecho con inteligencia artificial, y quiero que quede claro desde
+el principio. No soy desarrollador/a: tengo las ideas, decido cómo se ve y
+cómo se comporta cada cosa, y lo pruebo. El código lo escribió Claude
+(Anthropic), con Claude Code, a partir de esas decisiones.
+
+Todo se probó en mi PC y en máquinas virtuales, pero nadie lo revisó como lo
+haría un equipo de desarrollo, ni hubo una auditoría de seguridad. Si lo vas
+a usar, probalo primero con una biblioteca y una máquina que no te importen.
+Como dice la licencia, se entrega sin garantías. Si encontrás un error, abrí
+un Issue.
+
 ## Por qué existe
 
 Es una alternativa simple a Jellyfin/Plex. Esos sistemas son excelentes,
